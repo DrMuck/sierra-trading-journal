@@ -7,6 +7,12 @@ review card so you can build a playbook from your own trades.
 
 Runs entirely on your machine — no cloud, no data uploaded anywhere.
 
+![Trade Detail view — NQ day chart with Business Zones overlay (POC/VAH/VAL for today + prior days), trade card form with setup name, quality grade, idea + good/bad fields, and the trade's unrealized P&L curve with a look-forward toggle](docs/screenshot-trade-detail.png)
+
+*Trade detail view: 5-min day chart with Business Zones (today + prior days),
+the structured trade card, and the per-trade unrealized P&L curve with a
+look-forward overlay.*
+
 ## What it does
 
 - **Auto-import** trades from Sierra Chart `TradeActivityLog*.data` files and
