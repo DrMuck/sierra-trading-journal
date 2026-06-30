@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTrade, getTradeChart, updateTradeNotes, getDailyChart, getSetupLibrary } from '../lib/api';
+import { getTrade, getTradeChart, getDailyChart, getSetupLibrary } from '../lib/api';
 import type { SetupRow } from '../lib/api';
 import TradeCardForm from '../components/TradeCardForm';
 import { formatPnl, formatPoints, formatDuration, formatTime, formatCurrency, pnlColor, cn } from '../lib/utils';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries, createSeriesMarkers } from 'lightweight-charts';
 import type { IChartApi } from 'lightweight-charts';
 import {
@@ -27,8 +27,8 @@ export default function TradeDetail() {
   const [trade, setTrade] = useState<any>(null);
   const [fills, setFills] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any>(null);
-  const [notes, setNotes] = useState('');
-  const [rating, setRating] = useState<number | null>(null);
+  // notes + rating are no longer mirrored to local state — TradeCardForm
+  // owns them entirely and reads `trade.notes` / `trade.rating` from props.
   const [wideChartData, setWideChartData] = useState<any>(null);
   const [lookahead, setLookahead] = useState<number>(60);
   const [wideInterval, setWideInterval] = useState<number>(300);  // 60 = 1m, 300 = 5m
@@ -52,11 +52,11 @@ export default function TradeDetail() {
   useEffect(() => {
     if (!id) return;
     getTrade(id).then(d => {
-      setTrade(d.trade);  // setup_name / trade_idea / what_good / what_bad live on `trade`
-                          // and are passed straight into TradeCardForm as its `initial` prop.
+      // setup_name / trade_idea / what_good / what_bad / notes / rating all
+      // live on `trade` and are passed straight into TradeCardForm as its
+      // `initial` prop. No local state mirror needed any more.
+      setTrade(d.trade);
       setFills(d.fills || []);
-      setNotes(d.trade.notes || '');
-      setRating(d.trade.rating);
     });
   }, [id]);
 
@@ -364,10 +364,6 @@ export default function TradeDetail() {
     };
   }, [wideChartData, trade]);
 
-  async function saveNotes() {
-    if (!id) return;
-    await updateTradeNotes(id, notes, '[]', rating ?? undefined);
-  }
 
   // ── Daily 5-min chart with business zones ─────────────────────
   useEffect(() => {
@@ -1056,36 +1052,7 @@ export default function TradeDetail() {
         </table>
       </div>
 
-      {/* Notes */}
-      <div className="bg-surface-2 border border-border rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-text-2">Notes & Rating</h3>
-          <button onClick={saveNotes}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-2 text-white text-sm transition-colors">
-            <Save className="w-3.5 h-3.5" /> Save
-          </button>
-        </div>
-        <div className="flex gap-2 mb-3">
-          {[1, 2, 3, 4, 5].map(r => (
-            <button key={r} onClick={() => setRating(r === rating ? null : r)}
-              className={cn(
-                'w-8 h-8 rounded-lg text-sm font-medium transition-colors',
-                r === rating ? 'bg-accent text-white' : 'bg-surface-3 text-text-2 hover:bg-surface-4'
-              )}>
-              {r}
-            </button>
-          ))}
-          <span className="text-xs text-text-3 self-center ml-2">Trade quality rating</span>
-        </div>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          placeholder="Add notes about this trade: setup, execution, lessons learned..."
-          rows={4}
-          className="w-full bg-surface-3 border border-border rounded-lg px-3 py-2 text-sm text-text
-                     placeholder:text-text-3 resize-y focus:outline-none focus:border-accent/50"
-        />
-      </div>
+      {/* Notes & Rating moved into the Trade Card above — single source of truth. */}
     </div>
   );
 }
