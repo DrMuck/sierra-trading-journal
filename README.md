@@ -261,6 +261,61 @@ python causal_full.py --account YourAcct
 Each prints a quick summary; some also write CSV/PNG outputs into
 `backend/` (gitignored).
 
+## When something goes wrong — the diagnostic checklist
+
+Three places to look, in order of usefulness:
+
+### 1. Hit `http://localhost:8001/api/diagnostics` in your browser
+
+Returns the whole runtime state in one shot:
+
+```json
+{
+  "config": {
+    "sierra_chart_paths": [ {"path": "C:/SierraChart", "exists": true } ],
+    "db_path": "...", "db_exists": true,
+    "ticker_library": "", "ticker_library_exists": false,
+    "frontend_origins": ["http://localhost:5173"]
+  },
+  "db": {
+    "trades_total": 742, "trades_open": 0, "fills_total": 1845,
+    "accounts": ["7502", "Sim1", ...],
+    "latest_trade_date": "2026-06-30"
+  },
+  "sierra_discovery":    { "files_found": 88, "first_5": [...] },
+  "quantower_discovery": { "dbs_found":  2,  "first_3": [...] },
+  "logs": { "today_tail": [ "...recent log lines..." ] }
+}
+```
+
+Most "why isn't this working?" questions answer themselves here:
+- `sierra_chart_paths[].exists: false` → you misconfigured `.env`
+- `trades_total: 0` → you haven't run an Import yet
+- `db_exists: false` → DB will be created on first import
+- `today_tail` has tracebacks → there's the real error
+
+### 2. Backend log file
+
+`backend/logs/journal-YYYY-MM-DD.log` — one file per UTC day, kept
+indefinitely. Same format as the backend console window but persistent.
+Paste the relevant ~50 lines around the error into a bug report or
+GitHub issue.
+
+### 3. Backend console window
+
+The "TJ-Backend" terminal window that `start.bat` spawns. Live `INFO`
+and `WARNING` lines stream there as the backend runs. Don't close it —
+that kills the backend.
+
+### Bumping log verbosity
+
+Set `LOG_LEVEL=DEBUG` in `backend/.env` and restart. DEBUG logs include
+every SQL query and every tick-file probe — useful when "no tick data"
+or "0 trades imported" is the puzzle.
+
+Filter the diagnostic log tail by severity:
+`http://localhost:8001/api/diagnostics?log_level=ERROR&log_lines=200`
+
 ## Troubleshooting
 
 - **"Loading trade..." spinner never finishes** → backend probably isn't

@@ -6,22 +6,59 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 
+# Install logging FIRST so any import-time errors land in the log file.
+import log_setup
+log = log_setup.install()
+
 import database as db
 from sc_parser import (
     discover_log_files, parse_trade_log, extract_fills,
     reconstruct_trades, get_available_dates, get_accounts,
 )
 from tick_data import get_ohlc_bars, get_tick_data_around_trade, _load_ticks
-from config import POINT_VALUES
+from config import POINT_VALUES, FRONTEND_ORIGINS
 
-app = FastAPI(title="Trading Journal API", version="0.1.0")
+app = FastAPI(title="Trading Journal API", version="0.2.0")
+
+# Wire FastAPI exception logging now that the app exists.
+log_setup.install(app=app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=FRONTEND_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Startup banner — prints config summary so users can verify on launch ──
+
+@app.on_event("startup")
+def _startup_banner():
+    import config as _cfg
+    log.info("=" * 60)
+    log.info("Trading Journal API starting")
+    log.info("  Backend dir       : %s", _cfg.BACKEND_DIR)
+    log.info("  DB path           : %s  (%s)",
+             _cfg.DB_PATH,
+             "exists" if os.path.isfile(_cfg.DB_PATH) else "will be created")
+    sc_status = []
+    for p in _cfg.SIERRA_CHART_PATHS:
+        marker = "✓" if os.path.isdir(p) else "✗ MISSING"
+        sc_status.append(f"{p} [{marker}]")
+    log.info("  Sierra Chart paths: %s", ", ".join(sc_status) or "(none)")
+    qt_status = []
+    for p in _cfg.QUANTOWER_ROOTS:
+        marker = "✓" if os.path.isdir(p) else "✗ MISSING"
+        qt_status.append(f"{p} [{marker}]")
+    log.info("  Quantower roots   : %s", ", ".join(qt_status) or "(none — Quantower import disabled)")
+    log.info("  Parquet tick cache: %s",
+             _cfg.TICKER_LIBRARY or "(none — falling back to .scid only)")
+    log.info("  CORS origins      : %s", ", ".join(_cfg.FRONTEND_ORIGINS))
+    log.info("  Commissions       : default keys=%s, per_account=%s",
+             list(_cfg.COMMISSIONS_PER_SIDE.keys()),
+             list(_cfg.COMMISSIONS_PER_SIDE_BY_ACCOUNT.keys()))
+    log.info("=" * 60)
 
 
 # ── Import endpoints ──────────────────────────────────────────────
@@ -1409,6 +1446,104 @@ def get_trade_chart_data(trade_id: str, interval: int = 60, lookahead: int = 60,
         "markers": markers,
         "pnl_curve": pnl_curve,
     }
+
+
+# ── Diagnostics + health ─────────────────────────────────────────
+
+@app.get("/api/health")
+def health():
+    """Cheap liveness probe — no DB, no filesystem. Returns 200 if the
+    process is up. Use this from start.bat / monitoring scripts."""
+    return {"status": "ok", "service": "trading-journal"}
+
+
+@app.get("/api/diagnostics")
+def diagnostics(log_lines: int = 100, log_level: Optional[str] = None):
+    """Self-test + recent log tail. New users hit this first when something
+    looks broken — it surfaces config + DB + filesystem state in one shot.
+
+    `log_lines` controls how many tail lines to include (default 100).
+    `log_level` (optional: DEBUG / INFO / WARNING / ERROR) filters the tail.
+    """
+    import config as _cfg
+    import sqlite3
+    out: dict = {
+        "service": "trading-journal",
+        "version": app.version,
+        "now_utc": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "python": sys.version.split()[0],
+        "platform": sys.platform,
+    }
+
+    # Config snapshot (no secrets — everything here is already in .env which
+    # the user wrote themselves)
+    out["config"] = {
+        "sierra_chart_paths": [
+            {"path": p, "exists": os.path.isdir(p)}
+            for p in _cfg.SIERRA_CHART_PATHS
+        ],
+        "quantower_roots": [
+            {"path": p, "exists": os.path.isdir(p)}
+            for p in _cfg.QUANTOWER_ROOTS
+        ],
+        "ticker_library": _cfg.TICKER_LIBRARY,
+        "ticker_library_exists": bool(_cfg.TICKER_LIBRARY) and os.path.isdir(_cfg.TICKER_LIBRARY),
+        "db_path": _cfg.DB_PATH,
+        "db_exists": os.path.isfile(_cfg.DB_PATH),
+        "frontend_origins": _cfg.FRONTEND_ORIGINS,
+    }
+
+    # DB stats
+    try:
+        conn = db.get_db()
+        latest = conn.execute("SELECT MAX(trade_date) d FROM trades").fetchone()
+        out["db"] = {
+            "trades_total": conn.execute("SELECT COUNT(*) c FROM trades").fetchone()["c"],
+            "trades_open":  conn.execute("SELECT COUNT(*) c FROM trades WHERE is_open=1").fetchone()["c"],
+            "fills_total":  conn.execute("SELECT COUNT(*) c FROM fills").fetchone()["c"],
+            "accounts":     [r["account"] for r in conn.execute(
+                "SELECT DISTINCT account FROM trades ORDER BY account").fetchall()],
+            "import_log_rows": conn.execute("SELECT COUNT(*) c FROM import_log").fetchone()["c"],
+            "latest_trade_date": latest["d"] if latest else None,
+        }
+        conn.close()
+    except sqlite3.Error as e:
+        out["db"] = {"error": str(e)}
+
+    # File-discovery preview — first 5 SC + Quantower hits, just so users
+    # can see whether their paths are wired up correctly
+    try:
+        files = discover_log_files()
+        out["sierra_discovery"] = {
+            "files_found": len(files),
+            "first_5": [{"path": f["path"], "date": f["date"], "account": f["account"]}
+                        for f in files[:5]],
+        }
+    except Exception as e:
+        out["sierra_discovery"] = {"error": str(e)}
+
+    try:
+        from quantower_parser import discover_quantower_dbs
+        qtd = discover_quantower_dbs()
+        out["quantower_discovery"] = {
+            "dbs_found": len(qtd),
+            "first_3": [{"connection": d["connection"], "instance": d["instance"], "size": d["size"]}
+                        for d in qtd[:3]],
+        }
+    except Exception as e:
+        out["quantower_discovery"] = {"error": str(e)}
+
+    # Recent log tail
+    try:
+        from log_setup import tail_log, get_log_dir
+        out["logs"] = {
+            "log_dir": get_log_dir(),
+            "today_tail": tail_log(log_lines, level_filter=log_level),
+        }
+    except Exception as e:
+        out["logs"] = {"error": str(e)}
+
+    return out
 
 
 # ── Account/meta endpoints ───────────────────────────────────────

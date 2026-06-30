@@ -7,6 +7,9 @@ backend/journal.db
 backend/journal.db-wal
 backend/journal.db-shm
 
+# Backend logs — auto-rotated daily files
+backend/logs/
+
 # Python
 __pycache__/
 *.pyc
