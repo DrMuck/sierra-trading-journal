@@ -1,0 +1,41 @@
+# Per-user config (paths, ports, broker fees) — never commit
+backend/.env
+backend/commissions.json
+
+# Database — local trade history
+backend/journal.db
+backend/journal.db-wal
+backend/journal.db-shm
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.python-version
+
+# CSV / PNG outputs from analytics scripts
+backend/*.csv
+backend/*.png
+sim_plots/
+sim_samples.png
+APEX05_Long_Analysis.pdf
+*_chart.png
+*_curves.png
+rf_importance.png
+causal_dag.png
+counterfactual_equity.png
+trade_analysis*.csv
+iq_capital_*.txt
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

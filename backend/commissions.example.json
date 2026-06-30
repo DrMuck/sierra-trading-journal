@@ -1,0 +1,50 @@
+{
+  "_comment_": [
+    "Commission settings (USD per side, per contract).",
+    "Copy this file to 'commissions.json' and edit to match your broker fees.",
+    "Per-account overrides take precedence; otherwise the default rates apply.",
+    "Set a rate to 0 for Sim accounts or for symbols you don't trade."
+  ],
+  "default": {
+    "ES": 1.99,
+    "MES": 0.51,
+    "NQ": 1.99,
+    "MNQ": 0.51,
+    "GC": 1.99,
+    "MGC": 0.51,
+    "FDAX": 1.5,
+    "CL": 1.99,
+    "MCL": 0.51,
+    "RTY": 1.99,
+    "M2K": 0.51,
+    "YM": 1.99,
+    "MYM": 0.51
+  },
+  "per_account": {
+    "_comment_": "Override default rates for specific account IDs (e.g. prop firm IDs). Set Sim accounts to 0.",
+    "Sim1": {
+      "ES": 0.0,
+      "MES": 0.0,
+      "NQ": 0.0,
+      "MNQ": 0.0,
+      "GC": 0.0,
+      "MGC": 0.0,
+      "FDAX": 0.0
+    },
+    "Sim2": {
+      "ES": 0.0,
+      "MES": 0.0,
+      "NQ": 0.0,
+      "MNQ": 0.0,
+      "GC": 0.0,
+      "MGC": 0.0,
+      "FDAX": 0.0
+    },
+    "ACCT-EXAMPLE": {
+      "ES": 1.5,
+      "NQ": 1.5,
+      "MES": 0.51,
+      "MNQ": 0.51
+    }
+  }
+}
